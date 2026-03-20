@@ -1,5 +1,5 @@
 """
-Chart rendering utilities — warm theme.
+Chart rendering — blue/white theme.
 """
 
 import altair as alt
@@ -9,11 +9,9 @@ from typing import Optional
 
 
 def render_macro_chart(totals: dict) -> Optional[alt.Chart]:
-    """Render a donut chart showing macro distribution."""
     protein = totals.get("protein", 0)
     carbs = totals.get("carbs", 0)
     fat = totals.get("fat", 0)
-
     if protein + carbs + fat == 0:
         return None
 
@@ -32,9 +30,9 @@ def render_macro_chart(totals: dict) -> Optional[alt.Chart]:
                 "Macro:N",
                 scale=alt.Scale(
                     domain=["Protein", "Carbs", "Fat"],
-                    range=["#0984e3", "#6c5ce7", "#e17055"],
+                    range=["#2563eb", "#8b5cf6", "#f59e0b"],
                 ),
-                legend=alt.Legend(title=None, orient="bottom", labelColor="#6b5e52"),
+                legend=alt.Legend(title=None, orient="bottom", labelColor="#64748b"),
             ),
             tooltip=[
                 alt.Tooltip("Macro:N"),
@@ -45,12 +43,10 @@ def render_macro_chart(totals: dict) -> Optional[alt.Chart]:
         .properties(height=220)
         .configure_view(strokeWidth=0)
     )
-
     return chart
 
 
 def render_calorie_timeline(meals: list) -> Optional[alt.Chart]:
-    """Render a bar timeline of calorie intake."""
     if len(meals) < 2:
         return None
 
@@ -62,7 +58,6 @@ def render_calorie_timeline(meals: list) -> Optional[alt.Chart]:
             time_label = ts.strftime("%I:%M %p")
         except Exception:
             time_label = "?"
-
         records.append({
             "Time": time_label,
             "Meal": meal.get("meal_name", "Meal"),
@@ -78,40 +73,26 @@ def render_calorie_timeline(meals: list) -> Optional[alt.Chart]:
         .encode(
             x=alt.X("order:O", axis=alt.Axis(title=None, labels=False, ticks=False)),
             y=alt.Y("Calories:Q", title="Calories"),
-            color=alt.value("#f0932b"),
-            tooltip=[
-                alt.Tooltip("Meal:N"),
-                alt.Tooltip("Time:N"),
-                alt.Tooltip("Calories:Q"),
-            ],
+            color=alt.value("#2563eb"),
+            tooltip=[alt.Tooltip("Meal:N"), alt.Tooltip("Time:N"), alt.Tooltip("Calories:Q")],
         )
     )
 
     text = (
         alt.Chart(df)
-        .mark_text(dy=-14, fontSize=12, fontWeight="bold", color="#2d2118")
-        .encode(
-            x=alt.X("order:O"),
-            y=alt.Y("Calories:Q"),
-            text=alt.Text("Calories:Q", format=".0f"),
-        )
+        .mark_text(dy=-14, fontSize=12, fontWeight="bold", color="#1e293b")
+        .encode(x=alt.X("order:O"), y=alt.Y("Calories:Q"), text=alt.Text("Calories:Q", format=".0f"))
     )
 
     labels = (
         alt.Chart(df)
-        .mark_text(dy=18, fontSize=10, color="#9a8e82")
-        .encode(
-            x=alt.X("order:O"),
-            y=alt.value(0),
-            text="Time:N",
-        )
+        .mark_text(dy=18, fontSize=10, color="#94a3b8")
+        .encode(x=alt.X("order:O"), y=alt.value(0), text="Time:N")
     )
 
-    chart = (
+    return (
         (bars + text + labels)
         .properties(height=240)
         .configure_view(strokeWidth=0)
         .configure_axis(grid=False)
     )
-
-    return chart
