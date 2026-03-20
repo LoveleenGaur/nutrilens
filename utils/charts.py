@@ -1,5 +1,5 @@
 """
-Chart rendering utilities for NutriLens — light theme.
+Chart rendering utilities — warm theme.
 """
 
 import altair as alt
@@ -32,9 +32,9 @@ def render_macro_chart(totals: dict) -> Optional[alt.Chart]:
                 "Macro:N",
                 scale=alt.Scale(
                     domain=["Protein", "Carbs", "Fat"],
-                    range=["#2563eb", "#9333ea", "#e11d48"],
+                    range=["#0984e3", "#6c5ce7", "#e17055"],
                 ),
-                legend=alt.Legend(title=None, orient="bottom", labelColor="#5a6b62"),
+                legend=alt.Legend(title=None, orient="bottom", labelColor="#6b5e52"),
             ),
             tooltip=[
                 alt.Tooltip("Macro:N"),
@@ -50,15 +50,13 @@ def render_macro_chart(totals: dict) -> Optional[alt.Chart]:
 
 
 def render_calorie_timeline(meals: list) -> Optional[alt.Chart]:
-    """Render a timeline of calorie intake throughout the day."""
+    """Render a bar timeline of calorie intake."""
     if len(meals) < 2:
         return None
 
     records = []
-    cumulative = 0
     for meal in reversed(meals):
         cals = meal.get("data", {}).get("totals", {}).get("calories", 0)
-        cumulative += cals
         try:
             ts = datetime.fromisoformat(meal["timestamp"])
             time_label = ts.strftime("%I:%M %p")
@@ -69,7 +67,6 @@ def render_calorie_timeline(meals: list) -> Optional[alt.Chart]:
             "Time": time_label,
             "Meal": meal.get("meal_name", "Meal"),
             "Calories": cals,
-            "Cumulative": cumulative,
             "order": len(records),
         })
 
@@ -77,11 +74,11 @@ def render_calorie_timeline(meals: list) -> Optional[alt.Chart]:
 
     bars = (
         alt.Chart(df)
-        .mark_bar(cornerRadiusTopLeft=6, cornerRadiusTopRight=6, size=28)
+        .mark_bar(cornerRadiusTopLeft=8, cornerRadiusTopRight=8, size=32)
         .encode(
             x=alt.X("order:O", axis=alt.Axis(title=None, labels=False, ticks=False)),
             y=alt.Y("Calories:Q", title="Calories"),
-            color=alt.value("#34a853"),
+            color=alt.value("#f0932b"),
             tooltip=[
                 alt.Tooltip("Meal:N"),
                 alt.Tooltip("Time:N"),
@@ -92,7 +89,7 @@ def render_calorie_timeline(meals: list) -> Optional[alt.Chart]:
 
     text = (
         alt.Chart(df)
-        .mark_text(dy=-12, fontSize=11, fontWeight="bold", color="#1a2e22")
+        .mark_text(dy=-14, fontSize=12, fontWeight="bold", color="#2d2118")
         .encode(
             x=alt.X("order:O"),
             y=alt.Y("Calories:Q"),
@@ -102,7 +99,7 @@ def render_calorie_timeline(meals: list) -> Optional[alt.Chart]:
 
     labels = (
         alt.Chart(df)
-        .mark_text(dy=16, fontSize=10, color="#7a8f82")
+        .mark_text(dy=18, fontSize=10, color="#9a8e82")
         .encode(
             x=alt.X("order:O"),
             y=alt.value(0),
@@ -112,7 +109,7 @@ def render_calorie_timeline(meals: list) -> Optional[alt.Chart]:
 
     chart = (
         (bars + text + labels)
-        .properties(height=220)
+        .properties(height=240)
         .configure_view(strokeWidth=0)
         .configure_axis(grid=False)
     )
