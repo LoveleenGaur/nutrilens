@@ -6,6 +6,7 @@ Built with Streamlit + Groq (Llama 4 Scout Vision Model)
 import streamlit as st
 import json
 import base64
+import os
 from datetime import datetime
 from io import BytesIO
 from PIL import Image
@@ -19,137 +20,223 @@ st.set_page_config(
     page_title="NutriLens - AI Food Calorie Tracker",
     page_icon="🥗",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
-# ─── Custom CSS ───
+# ─── Professional Light Theme CSS ───
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap');
 
+    /* ── Global ── */
     .stApp {
-        font-family: 'DM Sans', sans-serif;
+        background: linear-gradient(160deg, #f8faf9 0%, #eef5f1 40%, #f5f0eb 100%) !important;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    }
+    #MainMenu {visibility: hidden;}
+    header[data-testid="stHeader"] {background: transparent !important;}
+    .block-container {padding-top: 2rem !important; max-width: 1200px !important;}
+
+    /* ── Sidebar ── */
+    section[data-testid="stSidebar"] {
+        background: #ffffff !important;
+        border-right: 1px solid #e8ece9 !important;
+    }
+    section[data-testid="stSidebar"] .stMarkdown p,
+    section[data-testid="stSidebar"] .stMarkdown h3,
+    section[data-testid="stSidebar"] .stMarkdown h4,
+    section[data-testid="stSidebar"] .stMarkdown span,
+    section[data-testid="stSidebar"] .stMarkdown strong,
+    section[data-testid="stSidebar"] label {
+        color: #2d3b33 !important;
+    }
+    section[data-testid="stSidebar"] .stCaption p { color: #8a9a90 !important; }
+
+    /* ── Hero ── */
+    .hero-header { text-align: center; padding: 1rem 0 2rem; }
+    .hero-logo {
+        display: inline-flex; align-items: center; gap: 14px; margin-bottom: 8px;
+    }
+    .hero-logo-icon {
+        width: 52px; height: 52px;
+        background: linear-gradient(135deg, #34a853, #2d8f48);
+        border-radius: 14px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.6rem;
+        box-shadow: 0 4px 16px rgba(52, 168, 83, 0.2);
+    }
+    .hero-title {
+        font-family: 'Playfair Display', serif;
+        font-size: 2.4rem; font-weight: 700; color: #1a2e22;
+        letter-spacing: -0.02em; margin: 0;
+    }
+    .hero-subtitle {
+        color: #7a8f82; font-size: 0.95rem; font-weight: 400;
+        letter-spacing: 0.03em; margin-top: 2px;
     }
 
-    .main-header {
-        text-align: center;
-        padding: 1.5rem 0 1rem;
+    /* ── Stat Cards ── */
+    .stat-grid {
+        display: grid; grid-template-columns: repeat(4, 1fr);
+        gap: 12px; margin: 1rem 0;
     }
-
-    .main-header h1 {
-        font-size: 2.5rem;
-        font-weight: 700;
-        margin-bottom: 0.25rem;
+    .stat-card {
+        background: #ffffff; border: 1px solid #e4ebe7;
+        border-radius: 14px; padding: 16px 18px; text-align: center;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.02);
     }
-
-    .main-header p {
-        opacity: 0.5;
-        font-size: 0.95rem;
-        letter-spacing: 0.05em;
+    .stat-icon { font-size: 1.3rem; margin-bottom: 4px; }
+    .stat-value {
+        font-size: 1.6rem; font-weight: 800;
+        letter-spacing: -0.02em; line-height: 1.2;
     }
-
-    .nutrition-card {
-        background: linear-gradient(135deg, #1a2f23 0%, #0f1f17 100%);
-        border: 1px solid rgba(200, 247, 197, 0.1);
-        border-radius: 16px;
-        padding: 1.5rem;
-        margin: 0.75rem 0;
+    .stat-label {
+        font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
+        letter-spacing: 0.08em; color: #8a9a90; margin-top: 2px;
     }
+    .stat-cal .stat-value { color: #e8850c; }
+    .stat-pro .stat-value { color: #2563eb; }
+    .stat-carb .stat-value { color: #9333ea; }
+    .stat-fat .stat-value { color: #e11d48; }
 
+    /* ── Food Items ── */
     .food-item {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 10px 14px;
-        background: rgba(255,255,255,0.03);
-        border-radius: 12px;
-        margin-bottom: 8px;
-        border: 1px solid rgba(255,255,255,0.05);
+        display: flex; align-items: center; gap: 14px;
+        padding: 14px 16px; background: #f8faf9;
+        border: 1px solid #edf1ee; border-radius: 12px;
+        margin-bottom: 8px; transition: background 0.15s ease;
     }
+    .food-item:hover { background: #f0f5f2; }
+    .food-emoji { font-size: 1.5rem; }
+    .food-details { flex: 1; min-width: 0; }
+    .food-name { font-weight: 600; font-size: 0.95rem; color: #1a2e22; }
+    .food-portion { font-size: 0.78rem; color: #8a9a90; margin-top: 1px; }
+    .food-cals { font-weight: 700; font-size: 0.95rem; color: #e8850c; white-space: nowrap; }
 
-    .food-emoji { font-size: 1.4rem; }
-
-    .food-name {
-        flex: 1;
-        font-weight: 500;
-        font-size: 0.95rem;
-    }
-
-    .food-portion {
-        font-size: 0.75rem;
-        opacity: 0.4;
-    }
-
-    .food-calories {
-        font-weight: 700;
-        color: #f0c674;
-        font-size: 0.95rem;
-    }
-
-    .macro-badge {
-        display: inline-block;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 0.8rem;
-        font-weight: 500;
-        margin: 4px;
-    }
-
+    /* ── Micro Chips ── */
     .micro-chip {
-        display: inline-block;
-        background: rgba(200, 247, 197, 0.08);
-        color: #c8f7c5;
-        padding: 4px 10px;
-        border-radius: 20px;
-        font-size: 0.75rem;
-        margin: 3px;
+        display: inline-block; background: #eef5f1; color: #2d6a3e;
+        padding: 5px 12px; border-radius: 20px; font-size: 0.78rem;
+        font-weight: 500; margin: 3px; border: 1px solid #d5e8da;
     }
+
+    /* ── Upload Zone ── */
+    div[data-testid="stFileUploader"] {
+        border: 2px dashed #c8d9ce; border-radius: 16px;
+        padding: 0.5rem; background: #f8faf9;
+    }
+    div[data-testid="stFileUploader"]:hover {
+        border-color: #34a853; background: #f2f8f4;
+    }
+
+    /* ── Primary Button ── */
+    .stButton > button[kind="primary"] {
+        background: linear-gradient(135deg, #34a853 0%, #2d8f48 100%) !important;
+        color: white !important; border: none !important;
+        border-radius: 12px !important; padding: 0.65rem 1.5rem !important;
+        font-weight: 600 !important; font-size: 0.95rem !important;
+        box-shadow: 0 2px 8px rgba(52, 168, 83, 0.25) !important;
+    }
+    .stButton > button[kind="primary"]:hover {
+        box-shadow: 0 4px 16px rgba(52, 168, 83, 0.35) !important;
+    }
+    .stButton > button { border-radius: 10px !important; font-weight: 500 !important; }
+
+    /* ── Tabs ── */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0; background: #ffffff; border-radius: 12px;
+        padding: 4px; border: 1px solid #e4ebe7;
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 8px; padding: 8px 24px;
+        font-weight: 500; color: #7a8f82;
+    }
+    .stTabs [aria-selected="true"] {
+        background: #34a853 !important; color: white !important;
+    }
+    .stTabs [data-baseweb="tab-highlight"] { display: none; }
+    .stTabs [data-baseweb="tab-border"] { display: none; }
+
+    /* ── Metrics ── */
+    div[data-testid="stMetric"] {
+        background: #ffffff; border: 1px solid #e4ebe7;
+        border-radius: 12px; padding: 14px 16px;
+    }
+    div[data-testid="stMetric"] label {
+        color: #7a8f82 !important; font-weight: 600 !important;
+        font-size: 0.75rem !important; text-transform: uppercase !important;
+    }
+    div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
+        color: #1a2e22 !important; font-weight: 700 !important;
+    }
+
+    /* ── Inputs ── */
+    .stTextInput input {
+        border-radius: 10px !important; border-color: #d5ddd8 !important;
+        background: #ffffff !important; color: #1a2e22 !important;
+    }
+    .stTextInput input:focus {
+        border-color: #34a853 !important;
+        box-shadow: 0 0 0 2px rgba(52, 168, 83, 0.15) !important;
+    }
+
+    /* ── Text Colors ── */
+    .stMarkdown p, .stMarkdown li, .stMarkdown span,
+    .stMarkdown h1, .stMarkdown h2, .stMarkdown h3,
+    .stMarkdown h4, .stMarkdown h5 { color: #1a2e22 !important; }
+    .stCaption p { color: #8a9a90 !important; }
+    .stSlider label { color: #1a2e22 !important; }
+    .stSelectbox label { color: #1a2e22 !important; }
+    .stTextInput label { color: #1a2e22 !important; }
+
+    /* ── Sidebar History ── */
+    .history-item {
+        padding: 10px 14px; background: #f8faf9;
+        border: 1px solid #e8ece9; border-radius: 10px;
+        margin-bottom: 6px; color: #2d3b33;
+    }
+    .history-item strong { color: #1a2e22; }
+    .history-cal { color: #e8850c; font-weight: 700; }
 
     .daily-summary {
-        background: linear-gradient(135deg, #2d1f00 0%, #1a1200 100%);
-        border: 1px solid rgba(240, 198, 116, 0.15);
-        border-radius: 16px;
-        padding: 1.25rem;
-        text-align: center;
+        background: linear-gradient(135deg, #fff8ed, #fff3e0);
+        border: 1px solid #fde5c0; border-radius: 14px;
+        padding: 1.25rem; text-align: center;
     }
-
-    .daily-cal {
-        font-size: 2.5rem;
-        font-weight: 700;
-        color: #f0c674;
-    }
-
+    .daily-cal { font-size: 2.2rem; font-weight: 800; color: #e8850c; line-height: 1.1; }
     .daily-label {
-        font-size: 0.8rem;
-        opacity: 0.4;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
+        font-size: 0.72rem; font-weight: 600; color: #b8860b;
+        text-transform: uppercase; letter-spacing: 0.1em;
     }
 
-    div[data-testid="stFileUploader"] {
-        border: 2px dashed rgba(200, 247, 197, 0.15);
-        border-radius: 16px;
-        padding: 0.5rem;
+    /* ── Section Title ── */
+    .section-title {
+        font-size: 1.05rem; font-weight: 700; color: #1a2e22;
+        margin: 1.5rem 0 0.75rem; display: flex; align-items: center; gap: 8px;
     }
 
-    .history-item {
-        padding: 10px 14px;
-        background: rgba(255,255,255,0.02);
-        border: 1px solid rgba(255,255,255,0.05);
-        border-radius: 12px;
-        margin-bottom: 8px;
+    /* ── Tip Box ── */
+    .tip-box {
+        background: #f0f8f3; border: 1px solid #c8e6cf;
+        border-left: 4px solid #34a853; border-radius: 10px;
+        padding: 14px 18px; margin-top: 12px;
+        font-size: 0.88rem; color: #2d6a3e;
     }
 
-    .stButton > button {
-        border-radius: 12px;
-        font-weight: 600;
-        letter-spacing: 0.02em;
+    /* ── Empty State ── */
+    .empty-state { text-align: center; padding: 3.5rem 2rem; color: #8a9a90; }
+    .empty-state-icon { font-size: 3.5rem; margin-bottom: 1rem; opacity: 0.5; }
+    .empty-state p { font-size: 0.95rem; color: #8a9a90; }
+
+    .app-footer {
+        text-align: center; padding: 2rem 0 1rem;
+        font-size: 0.75rem; color: #a3b3a9;
     }
 </style>
 """, unsafe_allow_html=True)
 
 
-# ─── Session State Init ───
+# ─── Session State ───
 if "meal_history" not in st.session_state:
     st.session_state.meal_history = []
 if "current_result" not in st.session_state:
@@ -158,10 +245,20 @@ if "analysis_done" not in st.session_state:
     st.session_state.analysis_done = False
 
 
+def get_api_key() -> str:
+    """Get Groq API key: secrets → env → sidebar fallback."""
+    try:
+        return st.secrets["GROQ_API_KEY"]
+    except (KeyError, FileNotFoundError):
+        pass
+    key = os.environ.get("GROQ_API_KEY", "")
+    if key:
+        return key
+    return ""
+
+
 def image_to_base64(uploaded_file) -> str:
-    """Convert uploaded image to base64 string."""
     img = Image.open(uploaded_file)
-    # Resize if too large (Groq has size limits)
     max_size = 1024
     if max(img.size) > max_size:
         ratio = max_size / max(img.size)
@@ -173,35 +270,44 @@ def image_to_base64(uploaded_file) -> str:
 
 
 def add_to_history(meal_name: str, result: dict):
-    """Add analyzed meal to session history."""
     entry = {
         "meal_name": meal_name or "Unnamed meal",
         "timestamp": datetime.now().isoformat(),
         "data": result,
     }
     st.session_state.meal_history.insert(0, entry)
-    # Keep last 50 entries
     st.session_state.meal_history = st.session_state.meal_history[:50]
 
 
+# ─── Get API Key ───
+groq_api_key = get_api_key()
+
 # ─── Header ───
 st.markdown("""
-<div class="main-header">
-    <h1>🥗 NutriLens</h1>
-    <p>AI-Powered Food Calorie Tracker &middot; Snap, Analyze, Track</p>
+<div class="hero-header">
+    <div class="hero-logo">
+        <div class="hero-logo-icon">🥗</div>
+        <h1 class="hero-title">NutriLens</h1>
+    </div>
+    <p class="hero-subtitle">AI-Powered Food Calorie Tracker &middot; Snap, Analyze, Track</p>
 </div>
 """, unsafe_allow_html=True)
 
+
 # ─── Sidebar ───
 with st.sidebar:
-    st.markdown("### ⚙️ Settings")
+    st.markdown("#### ⚙️ Configuration")
 
-    groq_api_key = st.text_input(
-        "Groq API Key",
-        type="password",
-        placeholder="gsk_...",
-        help="Get your free API key at https://console.groq.com",
-    )
+    if not groq_api_key:
+        groq_api_key = st.text_input(
+            "Groq API Key",
+            type="password",
+            placeholder="gsk_...",
+            help="Get your free API key at https://console.groq.com",
+        )
+        st.caption("Get a free key at [console.groq.com](https://console.groq.com)")
+    else:
+        st.success("API key loaded", icon="🔑")
 
     st.divider()
 
@@ -212,12 +318,11 @@ with st.sidebar:
             "meta-llama/llama-4-maverick-17b-128e-instruct",
         ],
         index=0,
-        help="Llama 4 Scout is fast & free. Maverick is more capable.",
+        format_func=lambda x: "Llama 4 Scout (Fast)" if "scout" in x else "Llama 4 Maverick (Accurate)",
     )
 
     st.divider()
 
-    # ─── Daily Summary in Sidebar ───
     if st.session_state.meal_history:
         today_str = datetime.now().strftime("%Y-%m-%d")
         today_meals = [
@@ -238,13 +343,11 @@ with st.sidebar:
         col1.metric("Protein", f"{totals['protein']}g")
         col2.metric("Carbs", f"{totals['carbs']}g")
         col3.metric("Fat", f"{totals['fat']}g")
-
         st.divider()
 
-    # ─── History ───
-    st.markdown("### 📋 Meal History")
+    st.markdown("#### 📋 Meal History")
     if st.session_state.meal_history:
-        if st.button("🗑️ Clear All History", use_container_width=True):
+        if st.button("🗑️ Clear History", use_container_width=True):
             st.session_state.meal_history = []
             st.rerun()
 
@@ -254,29 +357,29 @@ with st.sidebar:
             st.markdown(f"""
             <div class="history-item">
                 <strong>{entry['meal_name']}</strong>
-                <span style="float:right; color:#f0c674; font-weight:700;">{cals} kcal</span>
-                <br><span style="font-size:0.75rem; opacity:0.35;">{ts}</span>
+                <span style="float:right;" class="history-cal">{cals} kcal</span>
+                <br><span style="font-size:0.72rem; color:#8a9a90;">{ts}</span>
             </div>
             """, unsafe_allow_html=True)
     else:
-        st.caption("No meals tracked yet. Upload a photo to get started!")
+        st.caption("No meals tracked yet.")
 
     st.divider()
     st.markdown(
-        "<p style='text-align:center; font-size:0.7rem; opacity:0.3;'>"
-        "NutriLens v1.0 • Powered by Groq + Llama 4 Vision</p>",
+        '<p style="text-align:center; font-size:0.7rem; color:#a3b3a9;">'
+        'NutriLens v1.0 &middot; Powered by Groq + Llama 4</p>',
         unsafe_allow_html=True,
     )
 
 
 # ─── Main Content ───
-tab1, tab2 = st.tabs(["📸 Analyze Meal", "📊 Dashboard"])
+tab1, tab2 = st.tabs(["📸  Analyze Meal", "📊  Dashboard"])
 
 with tab1:
     col_input, col_result = st.columns([1, 1], gap="large")
 
     with col_input:
-        st.markdown("#### Upload Your Meal Photo")
+        st.markdown('<div class="section-title">📷 Upload Your Meal Photo</div>', unsafe_allow_html=True)
 
         uploaded_file = st.file_uploader(
             "Drop a meal photo here",
@@ -299,17 +402,16 @@ with tab1:
         )
 
         analyze_btn = st.button(
-            "🔍 Analyze Meal",
+            "🔍  Analyze Meal",
             type="primary",
             use_container_width=True,
             disabled=not uploaded_file or not groq_api_key,
         )
 
         if not groq_api_key:
-            st.info("👈 Enter your **free** Groq API key in the sidebar to get started.")
+            st.warning("Open the sidebar (top-left arrow) and enter your Groq API key.")
             st.markdown(
-                "Get one at [console.groq.com](https://console.groq.com) → "
-                "it's free with generous rate limits."
+                "Get a **free** key at [console.groq.com](https://console.groq.com)"
             )
 
         if analyze_btn and uploaded_file and groq_api_key:
@@ -333,8 +435,7 @@ with tab1:
                     elif result and "error" in result:
                         st.error(f"⚠️ {result['error']}")
                     else:
-                        st.error("Could not parse the nutritional analysis. Please try again.")
-
+                        st.error("Could not parse the analysis. Please try again.")
                 except Exception as e:
                     st.error(f"Error: {str(e)}")
 
@@ -342,65 +443,74 @@ with tab1:
         result = st.session_state.current_result
 
         if result:
-            st.markdown("#### 📊 Nutritional Breakdown")
+            st.markdown('<div class="section-title">📊 Nutritional Breakdown</div>', unsafe_allow_html=True)
 
-            # ─── Totals ───
             totals = result.get("totals", {})
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("🔥 Calories", f"{totals.get('calories', 0)} kcal")
-            c2.metric("🥩 Protein", f"{totals.get('protein', 0)}g")
-            c3.metric("🍞 Carbs", f"{totals.get('carbs', 0)}g")
-            c4.metric("🧈 Fat", f"{totals.get('fat', 0)}g")
+            st.markdown(f"""
+            <div class="stat-grid">
+                <div class="stat-card stat-cal">
+                    <div class="stat-icon">🔥</div>
+                    <div class="stat-value">{totals.get('calories', 0)}</div>
+                    <div class="stat-label">Calories</div>
+                </div>
+                <div class="stat-card stat-pro">
+                    <div class="stat-icon">🥩</div>
+                    <div class="stat-value">{totals.get('protein', 0)}g</div>
+                    <div class="stat-label">Protein</div>
+                </div>
+                <div class="stat-card stat-carb">
+                    <div class="stat-icon">🌾</div>
+                    <div class="stat-value">{totals.get('carbs', 0)}g</div>
+                    <div class="stat-label">Carbs</div>
+                </div>
+                <div class="stat-card stat-fat">
+                    <div class="stat-icon">🧈</div>
+                    <div class="stat-value">{totals.get('fat', 0)}g</div>
+                    <div class="stat-label">Fat</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
-            # ─── Macro Chart ───
             macro_chart = render_macro_chart(totals)
             if macro_chart:
                 st.altair_chart(macro_chart, use_container_width=True)
 
-            # ─── Food Items ───
             foods = result.get("foods", [])
             if foods:
-                st.markdown("##### 🍽️ Detected Items")
+                st.markdown('<div class="section-title">🍽️ Detected Items</div>', unsafe_allow_html=True)
                 for food in foods:
                     st.markdown(f"""
                     <div class="food-item">
                         <span class="food-emoji">{food.get('emoji', '🍽️')}</span>
-                        <div style="flex:1;">
+                        <div class="food-details">
                             <div class="food-name">{food.get('name', 'Unknown')}</div>
                             <div class="food-portion">{food.get('portion', '1 serving')}</div>
                         </div>
-                        <div>
-                            <span class="food-calories">{food.get('calories', '?')} kcal</span>
-                        </div>
+                        <div class="food-cals">{food.get('calories', '?')} kcal</div>
                     </div>
                     """, unsafe_allow_html=True)
 
-            # ─── Micronutrients ───
             micros = result.get("micronutrients", [])
             if micros:
-                st.markdown("##### 💊 Key Micronutrients")
-                chips_html = ""
-                for m in micros:
-                    chips_html += f'<span class="micro-chip">{m["name"]}: {m["amount"]}</span>'
-                st.markdown(chips_html, unsafe_allow_html=True)
+                st.markdown('<div class="section-title">💊 Key Micronutrients</div>', unsafe_allow_html=True)
+                chips = "".join(f'<span class="micro-chip">{m["name"]}: {m["amount"]}</span>' for m in micros)
+                st.markdown(chips, unsafe_allow_html=True)
 
-            # ─── Notes ───
             notes = result.get("notes", "")
             if notes:
-                st.info(f"💡 **Tip:** {notes}")
+                st.markdown(f'<div class="tip-box">💡 <strong>Tip:</strong> {notes}</div>', unsafe_allow_html=True)
 
         else:
-            st.markdown(
-                "<div style='text-align:center; padding:4rem 2rem; opacity:0.3;'>"
-                "<div style='font-size:4rem; margin-bottom:1rem;'>📸</div>"
-                "<p>Upload a meal photo and click <strong>Analyze</strong> to see results here</p>"
-                "</div>",
-                unsafe_allow_html=True,
-            )
-
+            st.markdown("""
+            <div class="empty-state">
+                <div class="empty-state-icon">📸</div>
+                <p><strong>Upload a meal photo</strong> and click <strong>Analyze</strong><br>
+                to see your nutritional breakdown here</p>
+            </div>
+            """, unsafe_allow_html=True)
 
 with tab2:
-    st.markdown("#### 📊 Daily Dashboard")
+    st.markdown('<div class="section-title">📊 Daily Dashboard</div>', unsafe_allow_html=True)
 
     if not st.session_state.meal_history:
         st.info("Start tracking meals to see your dashboard here!")
@@ -412,23 +522,38 @@ with tab2:
         ]
         totals = calculate_daily_totals(today_meals)
 
-        # ─── Daily overview ───
-        st.markdown("##### Today's Summary")
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Total Calories", f"{totals['calories']} kcal")
-        c2.metric("Total Protein", f"{totals['protein']}g")
-        c3.metric("Total Carbs", f"{totals['carbs']}g")
-        c4.metric("Total Fat", f"{totals['fat']}g")
+        st.markdown(f"""
+        <div class="stat-grid">
+            <div class="stat-card stat-cal">
+                <div class="stat-icon">🔥</div>
+                <div class="stat-value">{totals['calories']}</div>
+                <div class="stat-label">Total Calories</div>
+            </div>
+            <div class="stat-card stat-pro">
+                <div class="stat-icon">🥩</div>
+                <div class="stat-value">{totals['protein']}g</div>
+                <div class="stat-label">Total Protein</div>
+            </div>
+            <div class="stat-card stat-carb">
+                <div class="stat-icon">🌾</div>
+                <div class="stat-value">{totals['carbs']}g</div>
+                <div class="stat-label">Total Carbs</div>
+            </div>
+            <div class="stat-card stat-fat">
+                <div class="stat-icon">🧈</div>
+                <div class="stat-value">{totals['fat']}g</div>
+                <div class="stat-label">Total Fat</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-        # ─── Calorie timeline ───
         if len(today_meals) >= 2:
-            st.markdown("##### Calorie Timeline")
+            st.markdown('<div class="section-title">⏱️ Calorie Timeline</div>', unsafe_allow_html=True)
             timeline_chart = render_calorie_timeline(today_meals)
             if timeline_chart:
                 st.altair_chart(timeline_chart, use_container_width=True)
 
-        # ─── Meal breakdown table ───
-        st.markdown("##### Meal Breakdown")
+        st.markdown('<div class="section-title">🍽️ Meal Breakdown</div>', unsafe_allow_html=True)
         for entry in today_meals:
             data = entry["data"]
             t = data.get("totals", {})
@@ -441,11 +566,16 @@ with tab2:
                         f"({food.get('portion', '')})"
                     )
 
-        # ─── All-time stats ───
         all_totals = calculate_daily_totals(st.session_state.meal_history)
         st.divider()
-        st.markdown("##### All-Time Stats")
+        st.markdown('<div class="section-title">📈 All-Time Stats</div>', unsafe_allow_html=True)
         c1, c2, c3 = st.columns(3)
         c1.metric("Meals Tracked", len(st.session_state.meal_history))
-        c2.metric("Total Calories Logged", f"{all_totals['calories']} kcal")
+        c2.metric("Total Calories", f"{all_totals['calories']} kcal")
         c3.metric("Avg Cal / Meal", f"{all_totals['calories'] // max(len(st.session_state.meal_history), 1)} kcal")
+
+st.markdown("""
+<div class="app-footer">
+    Built with ❤️ using Streamlit + Groq &middot; Nutritional estimates are AI-generated approximations
+</div>
+""", unsafe_allow_html=True)
